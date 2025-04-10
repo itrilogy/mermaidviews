@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课题研究图表生成器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: flex;
+            flex-direction: row;
+            height: 100vh;
+        }
+        .sidebar {
+            width: 400px;
+            background-color: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            transition: width 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar.collapsed {
+            width: 50px;
+        }
+        .sidebar-toggle {
+            position: fixed;
+            left: 400px;
+            top: 20px;
+            background: white;
+            border: 1px solid #ddd;
+            color: black;
+            width: auto;
+            height: auto;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+            transition: left 0.3s ease;
+            z-index: 100;
+            padding: 10px 5px;
+        }
+        .sidebar.collapsed + .sidebar-toggle {
+            left: 60px;
+        }
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid #ddd;
+            padding: 0 15px;
+        }
+        .tab {
+            font-size: 16px;
+            padding: 10px 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            border-bottom: none;
+            margin-bottom: -1px;
+            background: transparent;
+            color: #666;
+        }
+        .tab.active {
+            background: white;
+            border-color: #ddd;
+            border-radius: 4px 4px 0 0;
+            color: #3498db;
+        }
+        .tab-content {
+            display: none;
+            flex: 1;
+            padding: 15px;
+            flex-direction: column;
+        }
+        .tab-content.active {
+            display: flex;
+        }
+        .preview {
+            flex: 1;
+            padding: 20px;
+            background-color: white;
+            transition: margin-left 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+        }
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        .preview-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .preview-content {
+            position: relative;
+            transform-origin: center center;
+            cursor: move;
+            flex: 1;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding: 20px 0;
+        }
+        
+        .chart-container {
+            position: relative;
+            min-height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        textarea {
+            width: 100%;
+            height: 100%;
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 17px;
+            resize: none;
+        }
+        button {
+            padding: 8px 15px;
+            background-color: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        select {
+            padding: 8px 15px;
+            color: #333;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .zoom-btn {
+            width: auto;
+            height: auto;
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="tabs">
+                <button class="tab" data-tab="ai">自动生成</button>
+                <button class="tab active" data-tab="editor">手动渲染</button>
+            </div>
+            <div id="editor" class="tab-content active">
+                <textarea id="mermaid-code" placeholder="在此输入Mermaid语法代码..."></textarea>
+                <div style="margin-top: 10px;">
+                    <button id="render-btn">渲染图表</button>
+                </div>
+            </div>
+
+            <div id="ai" class="tab-content">
+                <div class="ai-container" style="display: flex; flex-direction: column; gap: 15px; height: 100%;">
+                    <div class="ai-input" style="flex: 1;">
+                        <h3 style="margin: 0 0 10px 0;">内容素材以及要求</h3>
+                        <textarea id="ai-input-text" placeholder="请输入你想要生成的图表描述..." style="height: calc(100% - 35px);"></textarea>
+                    </div>
+                    <div class="ai-output" style="flex: 1;">
+                        <h3 style="margin: 0 0 10px 0;">图表代码</h3>
+                        <textarea id="ai-output-text" placeholder="AI生成的Mermaid语法将显示在这里..." style="height: calc(100% - 35px);" readonly></textarea>
+                    </div>
+                    <button id="ai-generate-btn" style="width: 100%;">生成图表</button>
+                </div>
+            </div>
+        </div>
+        <button class="sidebar-toggle">⇄</button>
+        <div class="preview">
+            <div class="preview-header">
+                <h2 style="margin: 0;">【预览】</h2>
+                <div class="preview-controls">
+                    <button class="zoom-btn" id="zoom-in" title="放大">+ 放大</button>
+                    <button class="zoom-btn" id="zoom-out" title="缩小">- 缩小</button>
+                    <button class="zoom-btn" id="zoom-reset" title="重置">↺ 重置</button>
+                    <button id="export-svg">导出SVG</button>
+                    <button id="export-pdf">导出PDF</button>
+                    <button id="export-jpg">导出JPG</button>
+                    <select id="jpg-scale">
+                        <option value="1">100%</option>
+                        <option value="2">200%</option>
+                        <option value="3">300%</option>
+                        <option value="4">400%</option>
+                        <option value="5">500%</option>
+                    </select>
+                </div>
+            </div>
+            <div id="mermaid-preview" class="preview-content">
+                <div class="chart-container"></div>
+            </div>
+        </div>
+    </div>
+    <script src="mermaid.min.js"></script>
+    <script src="jspdf.umd.min.js"></script>
+    <script src="jspdf.plugin.svg.min.js"></script>
+    <script src="canvg.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
